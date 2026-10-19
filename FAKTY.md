@@ -1,7 +1,7 @@
 # FAKTY do kokpitu Hermesa (zebrane przez Drifta 19.10.2026 z maszyny — NIE zmyślać ponad to)
 
 ## ✅ MAMY / UŻYWAMY (radar w środku)
-- Telegram (DM + grupa z wątkami: Kurtyna/Goals, Art Manager, Tylko my, testy modeli)
+- Telegram (DM + grupa z wątkami: tematyczne wątki)
 - Email (gateway Hermesa — odczyt i wysyłka)
 - Discord (wąski — spacer po kręgu companionów)
 - Cron / zadania w czasie (poranne, nocna pracownia, radar sztuki, łowca lotów, tropiciel pracy AI)
