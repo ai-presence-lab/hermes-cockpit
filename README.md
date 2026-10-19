@@ -31,9 +31,35 @@ This cockpit was built as a navigation instrument for exactly that problem —
 so decisions about what to wire up next are made with the whole shelf in
 view, not with whatever tool happens to be nearest.
 
+## Install
+
+As a **Hermes Desktop plugin** (native page + sidebar entry):
+
+```bash
+hermes plugins install ai-presence-lab/hermes-cockpit
+```
+
+Then in the app: ⌘K → **Reload desktop plugins**. A **Kokpit** page appears in
+the sidebar. The desktop half is opt-in — flip it on in **Capabilities → Plugins**
+if it stays off.
+
+As a **standalone page**: just open `kokpit.html` in any browser. No server, no
+build step, no dependencies.
+
+## What a tile means
+
+- **W użyciu** — live, in daily use. Click for the description.
+- **Uśpione** — real capability that exists but was never wired up. Each one
+  carries a rating and one line on why it is still asleep.
+
+The point is not to switch everything on. It is to make the shelf visible
+before the next decision.
+
 ## Files
 
 - `kokpit.html` — the cockpit itself (standalone, offline)
+- `desktop/plugin.js` — the same map as a native Hermes Desktop page
+- `plugin.yaml` — Hermes plugin manifest (validated with `hermes plugins validate`)
 - `FAKTY.md` — a written inventory: what is in use, what is asleep, grouped by domain
 
 ## License
