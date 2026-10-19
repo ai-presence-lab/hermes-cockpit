@@ -1,0 +1,8 @@
+name: hermes-cockpit
+version: 1.0.0
+description: "A drift map of everything a personal AI agent can reach — one screen, one question per tile: do I have hands on this, or not?"
+author: ai-presence-lab
+license: MIT
+homepage: https://github.com/ai-presence-lab/hermes-cockpit
+desktop:
+  entry: desktop/plugin.js
