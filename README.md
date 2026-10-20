@@ -1,5 +1,7 @@
 # Hermes Cockpit
 
+![Hermes Cockpit — radar of what your agent already has, and what it could](docs/cockpit.png)
+
 A single-screen, offline map of everything a personal AI agent can actually
 reach — built as a *drift map*, not a dashboard.
 
