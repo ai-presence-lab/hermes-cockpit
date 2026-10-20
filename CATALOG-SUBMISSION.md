@@ -69,7 +69,7 @@ maintainer: Agata Śliwińska × Drift
 tier: community                     # official | community
 category: general                   # desktop | memory | platform | web | tools | voice | automation | models | general
 requires_hermes: ">=0.21"
-version: "1.0.0"                    # quoted human label for the sha
+version: "1.1.0"                    # quoted human label for the sha
 docs_url: ""                        # optional
 platforms: []                       # empty = all platforms
 readme: true                        # render the README at the pinned sha
@@ -94,7 +94,9 @@ catalog rules ask authors to disclose:
   Nothing about the user is sent. It can be overridden via
   `HERMES_COCKPIT_CATALOG_URL` or the `catalog_url` argument (used by the tests).
 - **Writes:** only inside `<HERMES_HOME>/cockpit/` (`seen.json`,
-  `catalog-cache.json`, `cockpit.html`).
+  `catalog-cache.json`, `cockpit.html`, and the optional user-authored
+  `sectors.yaml`). Never a Hermes config file, never a plugin, never anything
+  outside that folder.
 - **Reads:** the user's own config and home, read-only, filtered to an allowlist of
   keys. It **never** reads `.env`, `auth.json`, or any credential file.
 - **No install/enable:** the page's buttons only copy a prompt to the clipboard.
