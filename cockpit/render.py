@@ -15,9 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from . import home, i18n
-from .capabilities import SECTORS
-
-_SECTOR_ANGLE = 360.0 / len(SECTORS)
+from . import sectors as sectors_mod
 
 
 def _esc(text: Any) -> str:
@@ -35,10 +33,12 @@ def _attr_pair(pair: Dict[str, str]) -> str:
     return f'data-en="{_esc(pair.get("en", ""))}" data-pl="{_esc(pair.get("pl", ""))}"'
 
 
-def _blip_position(item: Dict[str, Any], index_in_sector: int) -> Dict[str, float]:
-    sector_index = SECTORS.index(item["sector"]) if item["sector"] in SECTORS else 0
+def _blip_position(
+    item: Dict[str, Any], index_in_sector: int, sector_ids: List[str], sector_angle: float
+) -> Dict[str, float]:
+    sector_index = sector_ids.index(item["sector"]) if item["sector"] in sector_ids else 0
     # Centre each sector's blips within its wedge.
-    base = sector_index * _SECTOR_ANGLE + _SECTOR_ANGLE / 2.0
+    base = sector_index * sector_angle + sector_angle / 2.0
     spread = (index_in_sector % 3 - 1) * 9.0
     angle = (base + spread) % 360.0
     status = item.get("status")
@@ -46,8 +46,11 @@ def _blip_position(item: Dict[str, Any], index_in_sector: int) -> Dict[str, floa
     return {"angle": angle, "radius": radius}
 
 
-def _radar(items: List[Dict[str, Any]]) -> str:
+def _radar(items: List[Dict[str, Any]], sector_list: List[Dict[str, Any]]) -> str:
     cx = cy = 200.0
+    n = max(1, len(sector_list))
+    sector_angle = 360.0 / n
+    sector_ids = [s["id"] for s in sector_list]
     parts: List[str] = []
     parts.append('<svg class="radar" viewBox="0 0 400 400" role="img" aria-label="Radar">')
     parts.append('<defs><radialGradient id="rg" cx="50%" cy="50%" r="50%">'
@@ -56,24 +59,23 @@ def _radar(items: List[Dict[str, Any]]) -> str:
     parts.append(f'<circle cx="{cx}" cy="{cy}" r="150" fill="url(#rg)"/>')
     for r in (40, 75, 110, 150):
         parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" class="ring"/>')
-    for i in range(len(SECTORS)):
-        import math
+    import math
 
-        angle = math.radians(i * _SECTOR_ANGLE - 90)
+    for i in range(n):
+        angle = math.radians(i * sector_angle - 90)
         x = cx + 150 * math.cos(angle)
         y = cy + 150 * math.sin(angle)
         parts.append(f'<line x1="{cx}" y1="{cy}" x2="{x:.1f}" y2="{y:.1f}" class="spoke"/>')
     # sector labels
-    import math
-
-    for i, sector in enumerate(SECTORS):
-        angle = math.radians(i * _SECTOR_ANGLE + _SECTOR_ANGLE / 2 - 90)
+    for i, sector in enumerate(sector_list):
+        pair = sector["label"]
+        angle = math.radians(i * sector_angle + sector_angle / 2 - 90)
         lx = cx + 168 * math.cos(angle)
         ly = cy + 168 * math.sin(angle)
         parts.append(
             f'<text x="{lx:.1f}" y="{ly:.1f}" class="sector-label" text-anchor="middle" '
-            f'{_attr_pair({"en": i18n.t("sector_" + sector, "en"), "pl": i18n.t("sector_" + sector, "pl")})}'
-            f'>{_esc(i18n.t("sector_" + sector, "en"))}</text>'
+            f'{_attr_pair(pair)}'
+            f'>{_esc(pair.get("en", sector["id"]))}</text>'
         )
     # sweep
     parts.append(
@@ -89,7 +91,7 @@ def _radar(items: List[Dict[str, Any]]) -> str:
     for item in items:
         idx = counts.get(item["sector"], 0)
         counts[item["sector"]] = idx + 1
-        pos = _blip_position(item, idx)
+        pos = _blip_position(item, idx, sector_ids, sector_angle)
         angle = math.radians(pos["angle"] - 90)
         x = cx + pos["radius"] * math.cos(angle)
         y = cy + pos["radius"] * math.sin(angle)
@@ -129,8 +131,11 @@ def render_html(
     *,
     lang: str = "en",
     out_path: Path | None = None,
+    sectors: "sectors_mod.SectorConfig | None" = None,
 ) -> Dict[str, Any]:
     lang = lang if lang in i18n.LANGUAGES else "en"
+    sector_cfg = sectors if sectors is not None else sectors_mod.load()
+    sector_list = sector_cfg.sectors
 
     available = [i for i in items if i.get("status") == "off"]
     horizon_items = [i for i in items if i.get("kind") == "catalog"]
@@ -138,17 +143,18 @@ def render_html(
     stats = inventory.get("stats") or {}
 
     # group available by sector
-    grouped: Dict[str, List[Dict[str, Any]]] = {s: [] for s in SECTORS}
+    grouped: Dict[str, List[Dict[str, Any]]] = {s["id"]: [] for s in sector_list}
     for item in available:
         grouped.setdefault(item["sector"], []).append(item)
     panel = []
-    for sector in SECTORS:
-        bucket = grouped.get(sector) or []
+    for sector in sector_list:
+        bucket = grouped.get(sector["id"]) or []
         if not bucket:
             continue
+        pair = sector["label"]
         panel.append(
-            f'<h3 class="sector-head" {_attr_pair({"en": i18n.t("sector_" + sector, "en"), "pl": i18n.t("sector_" + sector, "pl")})}>'
-            f'{_esc(i18n.t("sector_" + sector, lang))}</h3>'
+            f'<h3 class="sector-head" {_attr_pair(pair)}>'
+            f'{_esc(pair.get(lang, pair.get("en", sector["id"])))}</h3>'
         )
         panel.append('<div class="cards">' + "".join(_card(i) for i in bucket) + "</div>")
     if not panel:
@@ -287,7 +293,7 @@ footer{{margin-top:18px;color:var(--dim);font-size:10px;text-align:center}}
 <div class="grid">
   <section class="radar-wrap">
     <h2 {_attr_pair({"en": i18n.t("radar_title", "en"), "pl": i18n.t("radar_title", "pl")})}>{_esc(i18n.t("radar_title", lang))}</h2>
-    {_radar(items)}
+    {_radar(items, sector_list)}
     <div class="legend">
       <span><span class="dot" style="background:#7CFFB2"></span><span {_attr_pair({"en": i18n.t("radar_legend_on", "en"), "pl": i18n.t("radar_legend_on", "pl")})}>{_esc(i18n.t("radar_legend_on", lang))}</span></span>
       <span><span class="dot" style="background:#3ff3ff"></span><span {_attr_pair({"en": i18n.t("radar_legend_off", "en"), "pl": i18n.t("radar_legend_off", "pl")})}>{_esc(i18n.t("radar_legend_off", lang))}</span></span>
