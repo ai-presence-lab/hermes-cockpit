@@ -8,12 +8,14 @@ so nothing here reaches into Hermes internals at import time. Everything that
 touches the user's Hermes home is done lazily, read-only, inside the handlers.
 
 The plugin registers:
-  * a tool ``cockpit`` (actions: scan, horizon, render, summary, all),
+  * a tool ``cockpit`` (actions: scan, horizon, render, summary, all, sectors, set_sectors),
   * an in-session slash command ``/cockpit``,
   * a bundled skill ``hermes-cockpit:hermes-cockpit``.
 
 It never installs, enables, or edits anything. Buttons in the generated page
 only copy a prompt to the clipboard for the user to paste to their own agent.
+The one file it may write (besides its own state) is the optional sector layout
+``<HERMES_HOME>/cockpit/sectors.yaml``, via the ``set_sectors`` action.
 """
 
 from __future__ import annotations
@@ -39,15 +41,18 @@ COCKPIT_SCHEMA: Dict[str, Any] = {
         "'summary' returns a compact, prompt-friendly briefing for you (the agent) to "
         "write the personal 'what this does for you' lines; 'render' writes the "
         "self-contained HTML page (optionally with your personal notes) and returns its "
-        "path; 'all' runs scan + horizon + render in one go. This tool NEVER installs, "
-        "enables, or changes anything."
+        "path; 'all' runs scan + horizon + render in one go; 'sectors' returns the "
+        "radar's current sectors and assignments; 'set_sectors' validates and writes a "
+        "custom sector layout to <HERMES_HOME>/cockpit/sectors.yaml (2-8 sectors). This "
+        "tool NEVER installs or enables anything; writing sectors.yaml is the only file "
+        "it edits besides its own state."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["scan", "horizon", "summary", "render", "all"],
+                "enum": ["scan", "horizon", "summary", "render", "all", "sectors", "set_sectors"],
                 "description": "Which part of the cockpit to produce. Default: all.",
             },
             "lang": {
@@ -72,6 +77,41 @@ COCKPIT_SCHEMA: Dict[str, Any] = {
                     "the env var HERMES_COCKPIT_CATALOG_URL also overrides it). Useful for "
                     "offline tests."
                 ),
+            },
+            "sectors": {
+                "type": "array",
+                "description": (
+                    "Only for action='set_sectors'. The radar's sectors, 2 to 8 of them. "
+                    "Each entry is {\"id\": \"studio\", \"label\": \"My studio\"} — id is "
+                    "required (letters, digits, _ - .), label is optional (max 32 chars) and "
+                    "falls back to the default wording for the built-in sector ids."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "label": {"type": "string"},
+                    },
+                    "required": ["id"],
+                },
+            },
+            "assign": {
+                "type": "object",
+                "description": (
+                    "Only for action='set_sectors'. Maps an item id — a capability id such as "
+                    "\"core:image_gen\", or a catalog plugin name such as \"catalog:some-plugin\" "
+                    "— to the id of one of the configured sectors. An unknown sector id is "
+                    "rejected."
+                ),
+                "additionalProperties": {"type": "string"},
+            },
+            "catalog_category_map": {
+                "type": "object",
+                "description": (
+                    "Only for action='set_sectors'. Optional: maps a catalog category (e.g. "
+                    "\"media\") to the id of one of the configured sectors."
+                ),
+                "additionalProperties": {"type": "string"},
             },
         },
     },
