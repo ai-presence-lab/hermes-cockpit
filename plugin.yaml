@@ -1,12 +1,15 @@
 name: hermes-cockpit
-version: 1.0.0
+version: 1.1.0
 description: >-
   A glowing retro-futuristic cockpit for your Hermes: a radar of what is already
   switched on, a side panel of features and catalog plugins that exist but are
   not running yet, and an "on the horizon" list of new catalog plugins since the
   last check — each in plain language with a TURN ON / MAYBE LATER / NOT NOW
-  recommendation. Read-only: it never installs or enables anything by itself.
-  Its only network call is the public plugin catalog JSON.
+  recommendation. The radar's sectors can be personalised (an optional
+  cockpit/sectors.yaml, managed with the cockpit action 'set_sectors').
+  Read-only: it never installs or enables anything by itself, and its only
+  writes are its own state files and that optional sector layout. Its only
+  network call is the public plugin catalog JSON.
 author: "Agata Śliwińska × Drift"
 license: MIT
 requires_hermes: ">=0.21"
