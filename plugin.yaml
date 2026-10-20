@@ -1,8 +1,20 @@
 name: hermes-cockpit
 version: 1.0.0
-description: "A drift map of everything a personal AI agent can reach — one screen, one question per tile: do I have hands on this, or not?"
-author: ai-presence-lab
+description: >-
+  A glowing retro-futuristic cockpit for your Hermes: a radar of what is already
+  switched on, a side panel of features and catalog plugins that exist but are
+  not running yet, and an "on the horizon" list of new catalog plugins since the
+  last check — each in plain language with a TURN ON / MAYBE LATER / NOT NOW
+  recommendation. Read-only: it never installs or enables anything by itself.
+  Its only network call is the public plugin catalog JSON.
+author: "Agata Śliwińska × Drift"
 license: MIT
-homepage: https://github.com/ai-presence-lab/hermes-cockpit
-desktop:
-  entry: desktop/plugin.js
+requires_hermes: ">=0.21"
+kind: standalone
+provides_tools:
+  - cockpit
+tags:
+  - discovery
+  - onboarding
+  - dashboard
+  - radar
