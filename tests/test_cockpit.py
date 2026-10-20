@@ -239,6 +239,193 @@ def test_no_secret_reads() -> None:
         shutil.rmtree(home, ignore_errors=True)
 
 
+def _write_sectors_yaml(home: Path, text: str) -> None:
+    cockpit = home / "cockpit"
+    cockpit.mkdir(parents=True, exist_ok=True)
+    (cockpit / "sectors.yaml").write_text(text, encoding="utf-8")
+
+
+def _sector_label_count(html: str) -> int:
+    return html.count('class="sector-label"')
+
+
+def test_default_sectors_unchanged() -> None:
+    home = _make_home()
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        from cockpit import sectors as sectors_mod
+
+        cfg = sectors_mod.load()
+        assert cfg.custom is False, cfg.to_dict()
+        assert cfg.ids() == ["conversation", "memory", "time", "creativity", "hands"], cfg.ids()
+        assert cfg.warnings == [], cfg.warnings
+
+        module = _load_plugin_module()
+        cat = home / "cat.json"
+        url = _fake_catalog(cat, ["one"])
+        data = json.loads(module.cockpit_handler({"action": "render", "catalog_url": url}))
+        assert data["ok"] is True, data
+        assert [s["id"] for s in data["sectors"]["sectors"]] == list(cfg.ids()), data["sectors"]
+        html = Path(data["render"]["path"]).read_text(encoding="utf-8")
+        assert _sector_label_count(html) == 5, html.count('class="sector-label"')
+        for label in ("Conversation", "Memory", "Time &amp; initiative", "Creativity", "Hands in the world"):
+            assert label in html, f"missing default sector label {label}"
+        print("ok  test_default_sectors_unchanged")
+    finally:
+        os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_custom_three_sector_render() -> None:
+    home = _make_home()
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        _write_sectors_yaml(
+            home,
+            "sectors:\n"
+            "  - id: conversation\n"
+            "    label: \"Talking\"\n"
+            "  - id: studio\n"
+            "    label: \"My studio\"\n"
+            "  - id: hands\n"
+            "    label: \"Doing\"\n"
+            "assign:\n"
+            "  core:image_gen: studio\n"
+            "catalog_category_map:\n"
+            "  media: studio\n",
+        )
+        module = _load_plugin_module()
+        cat = home / "cat.json"
+        url = _fake_catalog(cat, ["one", "two"])
+        data = json.loads(module.cockpit_handler({"action": "all", "catalog_url": url}))
+        assert data["ok"] is True, data
+
+        ids = [s["id"] for s in data["sectors"]["sectors"]]
+        assert ids == ["conversation", "studio", "hands"], ids
+        assert data["sectors"]["custom"] is True, data["sectors"]
+        assert data["sectors"]["assign"] == {"core:image_gen": "studio"}, data["sectors"]["assign"]
+
+        by_id = {i["id"]: i for i in data["items"]}
+        assert by_id["core:image_gen"]["sector"] == "studio", by_id["core:image_gen"]
+        # a capability whose default sector is gone falls back to the first sector
+        assert by_id["core:memory"]["sector"] == "conversation", by_id["core:memory"]
+        # the items are all still on the radar, nothing dropped
+        assert len(data["items"]) >= 10, len(data["items"])
+
+        html = Path(data["render"]["path"]).read_text(encoding="utf-8")
+        assert _sector_label_count(html) == 3, html.count('class="sector-label"')
+        for label in ("Talking", "My studio", "Doing"):
+            assert label in html, f"missing custom sector label {label}"
+        assert "RADAR SECTORS" in data["summary"], data["summary"]
+        print("ok  test_custom_three_sector_render")
+    finally:
+        os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_invalid_sector_file_falls_back() -> None:
+    home = _make_home()
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        from cockpit import sectors as sectors_mod
+
+        # (a) malformed YAML -> defaults, no crash
+        _write_sectors_yaml(home, "sectors: [unclosed\n")
+        cfg = sectors_mod.load()
+        assert cfg.ids() == ["conversation", "memory", "time", "creativity", "hands"], cfg.ids()
+        assert cfg.warnings, "expected a warning for malformed YAML"
+
+        # (b) 'sectors' not a list -> defaults, warning
+        _write_sectors_yaml(home, "sectors: 42\n")
+        cfg = sectors_mod.load()
+        assert cfg.custom is False and len(cfg.sectors) == 5, cfg.to_dict()
+        assert any("list" in w for w in cfg.warnings), cfg.warnings
+
+        # (c) too few sectors -> defaults; unknown assign target -> item keeps default
+        _write_sectors_yaml(home, "sectors:\n  - id: only\nassign:\n  core:image_gen: nope\n")
+        cfg = sectors_mod.load()
+        assert cfg.ids() == ["conversation", "memory", "time", "creativity", "hands"], cfg.ids()
+        assert cfg.assign == {}, cfg.assign
+        assert any("unknown sector" in w for w in cfg.warnings), cfg.warnings
+
+        # the warning reaches the summary output
+        module = _load_plugin_module()
+        cat = home / "cat.json"
+        url = _fake_catalog(cat, ["one"])
+        data = json.loads(module.cockpit_handler({"action": "summary", "catalog_url": url}))
+        assert "WARNING (cockpit/sectors.yaml)" in data["summary"], data["summary"]
+        print("ok  test_invalid_sector_file_falls_back")
+    finally:
+        os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_set_sectors_roundtrip() -> None:
+    home = _make_home()
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        module = _load_plugin_module()
+        written = json.loads(
+            module.cockpit_handler(
+                {
+                    "action": "set_sectors",
+                    "sectors": [
+                        {"id": "conversation", "label": "Talking"},
+                        {"id": "studio", "label": "My studio"},
+                        {"id": "hands", "label": "Doing"},
+                    ],
+                    "assign": {"core:image_gen": "studio"},
+                }
+            )
+        )
+        assert written["ok"] is True, written
+        target = home / "cockpit" / "sectors.yaml"
+        assert target.is_file(), "sectors.yaml was not written"
+
+        # reading it back through the tool gives the same layout
+        read = json.loads(module.cockpit_handler({"action": "sectors"}))
+        assert read["ok"] is True, read
+        assert [s["id"] for s in read["sectors"]] == ["conversation", "studio", "hands"], read["sectors"]
+        assert read["sectors"][1]["label"] == "My studio", read["sectors"][1]
+        assert read["assign"] == {"core:image_gen": "studio"}, read["assign"]
+
+        # and the module loads the same thing
+        from cockpit import sectors as sectors_mod
+
+        cfg = sectors_mod.load()
+        assert cfg.ids() == ["conversation", "studio", "hands"], cfg.ids()
+        assert cfg.custom is True
+        print("ok  test_set_sectors_roundtrip")
+    finally:
+        os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_nine_sectors_rejected() -> None:
+    home = _make_home()
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        from cockpit import sectors as sectors_mod
+
+        nine = [{"id": f"s{i}", "label": f"Sector {i}"} for i in range(9)]
+        module = _load_plugin_module()
+        result = json.loads(module.cockpit_handler({"action": "set_sectors", "sectors": nine}))
+        assert result["ok"] is False, result
+        assert "9" in result["error"] or "maximum" in result["error"], result
+        assert not (home / "cockpit" / "sectors.yaml").is_file(), "invalid config must not be written"
+
+        # the module-level writer raises too
+        try:
+            sectors_mod.set_sectors(nine)
+            raise AssertionError("expected SectorError for 9 sectors")
+        except sectors_mod.SectorError:
+            pass
+        print("ok  test_nine_sectors_rejected")
+    finally:
+        os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(home, ignore_errors=True)
+
+
 def main() -> int:
     tests = [
         test_scan_and_detection,
@@ -246,6 +433,11 @@ def main() -> int:
         test_render_and_js,
         test_tool_handler_end_to_end,
         test_no_secret_reads,
+        test_default_sectors_unchanged,
+        test_custom_three_sector_render,
+        test_invalid_sector_file_falls_back,
+        test_set_sectors_roundtrip,
+        test_nine_sectors_rejected,
     ]
     failures = 0
     for test in tests:
