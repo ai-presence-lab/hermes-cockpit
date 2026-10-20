@@ -9,7 +9,9 @@ programmer, "there is a new thing you could install" is not help, it is noise.
 `hermes-cockpit` turns that noise into one glowing page:
 
 - **A radar** of what your Hermes already has switched on — grouped into five
-  sectors: *Conversation, Memory, Time & initiative, Creativity, Hands in the world*.
+  sectors by default: *Conversation, Memory, Time & initiative, Creativity, Hands
+  in the world*. The sectors are yours to rename and reshape (see
+  [Personalise your radar](#personalise-your-radar)).
 - **A side panel** of features and catalog plugins that exist but are **not running
   yet**, grouped by theme, each with a plain-language "what this gives you".
 - **On the horizon** — the plugins that are genuinely **new in the catalog** since
@@ -81,9 +83,50 @@ default, Polish included).
 | `cockpit(action="summary")` | a briefing the agent writes personal lines from |
 | `cockpit(action="render")`  | writes `cockpit.html`, returns its path |
 | `cockpit(action="all")`     | everything above in one call (what `/cockpit` does) |
+| `cockpit(action="sectors")` | the radar's current sectors and assignments |
+| `cockpit(action="set_sectors", ...)` | validates and writes `sectors.yaml` |
 
 `render` accepts `notes={"<item id>": "your sentence"}` so the agent's own
 wording replaces the generic catalog text, and `lang="pl"` for Polish.
+
+### Personalise your radar
+
+The five sectors are a sensible default, not a rule. You can rename them, drop
+some, add your own (2–8), and say which feature belongs where. Edit the optional
+file — or, easier, just ask your agent:
+
+```
+cockpit(action="set_sectors",
+        sectors=[{"id": "conversation", "label": "Talking"},
+                 {"id": "studio",      "label": "My studio"},
+                 {"id": "hands",       "label": "Doing"}],
+        assign={"core:image_gen": "studio"})
+```
+
+The same thing by hand, in `<HERMES_HOME>/cockpit/sectors.yaml`:
+
+```yaml
+sectors:
+  - id: conversation        # an existing sector id -> keeps its default label
+    label: "Talking"         # your own label (max 32 characters)
+  - id: studio
+    label: "My studio"
+  - id: hands
+
+assign:                      # item id -> sector id
+  core:image_gen: studio     # a built-in capability ("core:…")
+  catalog:some-plugin: studio  # a catalog plugin ("catalog:<name>")
+
+catalog_category_map:        # optional: catalog category -> sector id
+  media: studio
+```
+
+The rules are forgiving: **if the file is missing or invalid you get the five
+default sectors**, entries that do not make sense are ignored *with a warning in
+the summary*, an `assign` pointing at a sector that does not exist leaves that
+item in its default sector, and there can be **at most 8 sectors**. Writing the
+file (via `set_sectors`) is atomic and validated before anything is touched — it
+is the only file the cockpit edits besides its own state.
 
 ### Keep the horizon fresh
 
@@ -106,7 +149,10 @@ hermes cron create "every 2d" \
   file. It reports *counts and names of mechanisms*, never their contents.
 - **Offline-friendly.** If the catalog is unreachable, the last snapshot is reused
   and the page says so.
-- **Read-only.** It never installs, enables, disables, or edits anything.
+- **Read-only, with one deliberate exception.** It never installs, enables,
+  disables, or edits any configuration. The only thing it can write outside its
+  own state is your `sectors.yaml`, and only when you ask it to
+  (`set_sectors`) — atomic and validated first.
 
 ## Uninstall
 
@@ -115,7 +161,8 @@ hermes plugins remove hermes-cockpit
 ```
 
 State lives only in `<HERMES_HOME>/cockpit/` (`seen.json`, `catalog-cache.json`,
-`cockpit.html`) — delete that folder too if you want a clean slate.
+`cockpit.html`, and your optional `sectors.yaml`) — delete that folder too if you
+want a clean slate.
 
 ## What's inside
 
@@ -127,6 +174,7 @@ hermes-cockpit-plugin/
 │   ├── home.py                 # locate HERMES_HOME, read config read-only, state paths
 │   ├── inventory.py            # the radar's raw facts
 │   ├── capabilities.py         # the curated, generic map of Hermes capabilities
+│   ├── sectors.py              # the user's optional radar sector layout (sectors.yaml)
 │   ├── horizon.py              # fetch + diff the public catalog
 │   ├── recommend.py            # deterministic TURN ON / MAYBE LATER / NOT NOW
 │   ├── render.py               # the single self-contained HTML page
